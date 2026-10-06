@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpacePlanner — Gestione Planimetria</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" title="SpacePlanner">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Ruler (Diagonal Left to Right) -->
+            <path d="M 3 6 L 18 21" stroke-width="2.5" />
+            <path d="M 6 5 L 8 7" />
+            <path d="M 9 8 L 11 10" />
+            <path d="M 12 11 L 14 13" />
+            <path d="M 15 14 L 17 16" />
+            <!-- Pencil (Diagonal Right to Left) -->
+            <path d="M 20 4 L 18 2 L 6 14 L 5 19 L 10 18 Z" />
+            <path d="M 14 6 L 18 10" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">SpacePlanner</div>
+          <div class="brand-sub">Gestione planimetria</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="saveStatus" class="save-status">Salvato</span>
+        <button class="btn ghost" id="newBtn">Nuovo</button>
+        <button class="btn ghost" id="openBtn">Apri JSON</button>
+        <button class="btn primary" id="saveBtn">Salva JSON</button>
+        <input type="file" id="fileInput" accept=".json,application/json" hidden>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <!-- Left Sidebar -->
+      <aside class="sidebar left">
+        <div class="panel-title">Planimetria</div>
+
+        <div class="section-label">Dimensioni Sala</div>
+        <div class="field">
+          <div class="field-label">Nome Sala</div>
+          <input type="text" id="roomNameInput" placeholder="Padiglione A">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <div class="field-label">Larghezza (m)</div>
+            <input type="number" id="roomWidthInput" min="2" max="200" step="0.5">
+          </div>
+          <div class="field">
+            <div class="field-label">Altezza (m)</div>
+            <input type="number" id="roomHeightInput" min="2" max="200" step="0.5">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-label">Statistiche Planimetria</div>
+        <div class="stats-card">
+          <div class="stat-box">
+            <span class="stat-val" id="statMerchants">0</span>
+            <span class="stat-lbl">Commercianti</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="statExhibitorsMeters">0 m²</span>
+            <span class="stat-lbl">Area Espositori</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="statExhibitorsLength">0 m</span>
+            <span class="stat-lbl">Metri Espositivi</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-val" id="statOccupancy">0%</span>
+            <span class="stat-lbl">Occupazione Sala</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-label">Aggiungi Elementi</div>
+        <button class="tool-card" data-tool="column">
+          <span class="tool-icon column-icon"></span>
+          <span><strong>Colonna</strong><small>Elemento fisso</small></span>
+          <span class="plus">+</span>
+        </button>
+        <button class="tool-card" data-tool="wall">
+          <span class="tool-icon wall-icon"></span>
+          <span><strong>Parete</strong><small>Divisorio interno</small></span>
+          <span class="plus">+</span>
+        </button>
+        <button class="tool-card" data-tool="furniture">
+          <span class="tool-icon furniture-icon"></span>
+          <span><strong>Mobile</strong><small>Elemento fisso</small></span>
+          <span class="plus">+</span>
+        </button>
+        <button class="tool-card" data-tool="stairs">
+          <span class="tool-icon stairs-icon"></span>
+          <span><strong>Scala</strong><small>Elemento fisso</small></span>
+          <span class="plus">+</span>
+        </button>
+        <button class="tool-card" data-tool="exhibitor">
+          <span class="tool-icon exhibitor-icon"></span>
+          <span><strong>Spazio espositivo</strong><small>Area assegnabile</small></span>
+          <span class="plus">+</span>
+        </button>
+        <button class="tool-card" data-tool="door">
+          <span class="tool-icon door-icon"></span>
+          <span><strong>Porta</strong><small>Apertura su bordo</small></span>
+          <span class="plus">+</span>
+        </button>
+        <button class="tool-card" data-tool="window">
+          <span class="tool-icon window-icon"></span>
+          <span><strong>Finestra</strong><small>Infisso su bordo</small></span>
+          <span class="plus">+</span>
+        </button>
+
+        <div class="divider"></div>
+        <div class="section-label">Vista & Strumenti</div>
+        <button class="side-action" id="fitBtn"><span>⌗</span> Adatta alla vista</button>
+        <button class="side-action" id="gridBtn"><span>⊞</span> Griglia <b id="gridState">ON</b></button>
+        <button class="side-action" id="labelToggleBtn"><span>🏷</span> Etichette <b id="labelState">HOVER</b></button>
+        <button class="side-action" id="zoomOutBtn"><span>−</span> Zoom out</button>
+        <button class="side-action" id="zoomInBtn"><span>＋</span> Zoom in</button>
+
+        <div class="help-card" style="display: none;">
+          <div class="help-title">Suggerimento</div>
+          <p>Puoi scegliere se rappresentare le porte come una linea spessa marrone sul bordo oppure con apertura verso l'interno o verso l'esterno. Le porte e le finestre si agganciano al bordo della sala.</p>
+        </div>
+      </aside>
+
+      <!-- Center SVG Canvas Area -->
+      <section class="canvas-area">
+        <div class="canvas-toolbar">
+          <div>
+            <div class="space-title" id="spaceTitle">Padiglione A</div>
+            <div class="space-meta">
+              <span id="spaceSize">20 × 12 m</span>
+              <span class="dot"></span>
+              <span id="objectCount">0 elementi</span>
+            </div>
+          </div>
+          <div class="canvas-tools">
+            <button class="icon-btn" id="undoBtn" title="Annulla">↶</button>
+            <button class="icon-btn" id="redoBtn" title="Ripeti">↷</button>
+          </div>
+        </div>
+        
+        <div class="canvas-wrap" id="canvasWrap">
+          <svg id="stage" xmlns="http://www.w3.org/2000/svg" aria-label="Planimetria">
+            <defs>
+              <pattern id="minorGrid" width="1" height="1" patternUnits="userSpaceOnUse">
+                <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e8e6e2" stroke-width="0.05"/>
+              </pattern>
+              <pattern id="majorGrid" width="5" height="5" patternUnits="userSpaceOnUse">
+                <rect width="5" height="5" fill="url(#minorGrid)"/>
+                <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d9d6d0" stroke-width="0.08"/>
+              </pattern>
+              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="0.15" stdDeviation="0.2" flood-color="#1d1b18" flood-opacity=".12"/>
+              </filter>
+            </defs>
+            <g id="viewport">
+              <rect id="room" x="0" y="0" rx="0" ry="0" fill="#ffffff" stroke="#292722" stroke-width="0.12"/>
+              <rect id="grid" x="0" y="0" fill="url(#majorGrid)"/>
+              <g id="objects"></g>
+              <g id="labelsLayer"></g>
+            </g>
+          </svg>
+          <div class="scale-bar"><span>0</span><i></i><span>2 m</span></div>
+          <div class="zoom-pill"><span id="zoomLabel">100%</span></div>
+        </div>
+      </section>
+
+      <!-- Right Sidebar -->
+      <aside class="sidebar right">
+        <div class="panel-title">Proprietà</div>
+        <div id="emptyProperties" class="empty-state">
+          <div class="empty-icon">◇</div>
+          <strong>Nessun elemento selezionato</strong>
+          <span>Seleziona un elemento nella planimetria per modificarne le proprietà o spostarlo.</span>
+        </div>
+        <div id="properties" class="properties hidden"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  
+  <script src="app.js"></script>
+</body>
+</html>
