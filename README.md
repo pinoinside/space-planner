@@ -1,4 +1,4 @@
-# Spazio — Prototipo
+# Space Planner
 
 Prototipo standalone del gestionale per la gestione di una planimetria.
 
