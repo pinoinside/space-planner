@@ -26,8 +26,10 @@ let project = {
 let selected = null;
 let hovered = null;
 let labelMode = "hover"; // "hover", "merchants", "all"
-let scale = 1, offset = { x: 0, y: 0 }, gridOn = true, history = [], future = [];
+let scale = 1, fitScale = 1, offset = { x: 0, y: 0 }, gridOn = true, history = [], future = [];
 let drag = null;
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
 
 const STORAGE_KEY = "spazio_planimetria_data";
 
@@ -142,14 +144,31 @@ function getOpeningCoords(o) {
 function fitView() {
   const cw = canvasWrap.clientWidth, ch = canvasWrap.clientHeight;
   const pad = 60, rw = project.space.width, rh = project.space.height;
-  scale = Math.min((cw - pad * 2) / rw, (ch - pad * 2) / rh);
+  fitScale = Math.min((cw - pad * 2) / rw, (ch - pad * 2) / rh);
+  scale = fitScale;
   offset = { x: (cw - rw * scale) / 2, y: (ch - rh * scale) / 2 };
   updateTransform();
 }
 
 function updateTransform() {
   viewport.setAttribute("transform", `translate(${offset.x},${offset.y}) scale(${scale})`);
-  $("#zoomLabel").textContent = Math.round(scale * 100) + "%";
+  const zoomPct = fitScale > 0 ? Math.round((scale / fitScale) * 100) : 100;
+  $("#zoomLabel").textContent = zoomPct + "%";
+}
+
+function zoomAt(factor, cx, cy) {
+  const oldScale = scale;
+  const minS = Math.max(2, fitScale * 0.3);
+  const maxS = Math.min(300, fitScale * 12);
+  const newScale = Math.max(minS, Math.min(maxS, scale * factor));
+  
+  if (Math.abs(newScale - oldScale) < 0.0001) return;
+
+  const ratio = newScale / oldScale;
+  offset.x = cx - (cx - offset.x) * ratio;
+  offset.y = cy - (cy - offset.y) * ratio;
+  scale = newScale;
+  updateTransform();
 }
 
 function roomPoint(evt) {
@@ -202,7 +221,6 @@ function updateStats() {
   let merchantMeters = 0;
   let totalAvailableMeters = 0;
 
-  // Somma dei metri dei commercianti e dei metri totali degli spazi espositore disponibili
   project.exhibitors.forEach(e => {
     const spaceMeters = Math.max(e.width || 0, e.height || 0);
     totalAvailableMeters += spaceMeters;
@@ -215,12 +233,10 @@ function updateStats() {
     }
   });
 
-  // Area Espositori = Dimensioni totali della sala tolti mobili, colonne e altri elementi fissi
   const roomArea = (project.space.width || 0) * (project.space.height || 0);
   const fixedArea = project.fixedElements.reduce((sum, f) => sum + ((f.width || 0) * (f.height || 0)), 0);
   const netExhibitorArea = Math.max(0, roomArea - fixedArea);
 
-  // Occupazione Sala = Metri dei commercianti / Metri totali disponibili
   const occupancyRatio = totalAvailableMeters > 0 ? Math.round((merchantMeters / totalAvailableMeters) * 100) : 0;
 
   const statMerchantsEl = $("#statMerchants");
@@ -698,6 +714,13 @@ function onPointerDown(e, kind, id, parent) {
 }
 
 stage.addEventListener("pointermove", e => {
+  if (isPanning) {
+    offset.x = e.clientX - panStart.x;
+    offset.y = e.clientY - panStart.y;
+    updateTransform();
+    return;
+  }
+
   if (!drag) return;
   const o = getObj(drag.kind, drag.id), p = roomPoint(e);
   let dx = p.x - drag.start.x, dy = p.y - drag.start.y;
@@ -733,6 +756,13 @@ stage.addEventListener("pointermove", e => {
 });
 
 stage.addEventListener("pointerup", e => {
+  if (isPanning) {
+    isPanning = false;
+    canvasWrap.classList.remove("panning");
+    try { if (e.pointerId !== undefined) stage.releasePointerCapture(e.pointerId); } catch (err) {}
+    return;
+  }
+
   if (drag) {
     drag = null;
     snapshot();
@@ -751,8 +781,26 @@ stage.addEventListener("pointerdown", e => {
     selected = null;
     showProps();
     render();
+
+    isPanning = true;
+    panStart = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    canvasWrap.classList.add("panning");
+    try {
+      if (e.pointerId !== undefined && stage.setPointerCapture) {
+        stage.setPointerCapture(e.pointerId);
+      }
+    } catch (err) {}
   }
 });
+
+canvasWrap.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = canvasWrap.getBoundingClientRect();
+  const cx = e.clientX - r.left;
+  const cy = e.clientY - r.top;
+  const factor = e.deltaY < 0 ? 1.15 : 0.87;
+  zoomAt(factor, cx, cy);
+}, { passive: false });
 
 function addElement(tool) {
   snapshot();
@@ -854,7 +902,6 @@ function showProps() {
     
     html += `<button class="btn ghost" id="swapDimsBtn" style="width:100%;margin-bottom:10px;">⇄ Inverti L × A (Ruota 90°)</button>`;
 
-    // Selettore Colore per tutti gli elementi
     let defaultColor = "#dbeae7";
     if (selected.kind === "table") defaultColor = "#ffffff";
     if (selected.kind === "fixed") defaultColor = o.type === "column" ? "#77736c" : (o.type === "stairs" ? "#8a857b" : (o.type === "wall" ? "#3a3731" : "#9b968e"));
@@ -894,7 +941,6 @@ function showProps() {
       if (selected.kind === "opening") clampOpenings();
       render();
 
-      // Aggiorna solo il titolo del pannello se viene modificato il nome senza distruggere l'input attivo
       const heading = p.querySelector(".prop-heading strong");
       if (heading && (key === "name" || key === "merchant")) {
         heading.textContent = v || "Elemento";
@@ -981,8 +1027,14 @@ $("#labelToggleBtn").onclick = () => {
 };
 
 $("#fitBtn").onclick = fitView;
-$("#zoomInBtn").onclick = () => { scale = Math.min(scale * 1.2, 5); updateTransform(); };
-$("#zoomOutBtn").onclick = () => { scale = Math.max(scale / 1.2, 0.2); updateTransform(); };
+$("#zoomInBtn").onclick = () => {
+  const cw = canvasWrap.clientWidth, ch = canvasWrap.clientHeight;
+  zoomAt(1.25, cw / 2, ch / 2);
+};
+$("#zoomOutBtn").onclick = () => {
+  const cw = canvasWrap.clientWidth, ch = canvasWrap.clientHeight;
+  zoomAt(1 / 1.25, cw / 2, ch / 2);
+};
 
 $("#undoBtn").onclick = () => {
   if (!history.length) return;
@@ -1026,7 +1078,7 @@ $("#saveBtn").onclick = downloadJSON;
 
 $("#openBtn").onclick = () => {
   const fileInput = $("#fileInput");
-  fileInput.value = ""; // Reset per consentire il ricaricamento dello stesso file
+  fileInput.value = "";
   fileInput.click();
 };
 

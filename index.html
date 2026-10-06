@@ -104,7 +104,7 @@
         </button>
         <button class="tool-card" data-tool="exhibitor">
           <span class="tool-icon exhibitor-icon"></span>
-          <span><strong>Spazio espositivo</strong><small>Area assegnabile</small></span>
+          <span><strong>Espositore</strong><small>Area assegnabile</small></span>
           <span class="plus">+</span>
         </button>
         <button class="tool-card" data-tool="door">
@@ -126,9 +126,9 @@
         <button class="side-action" id="zoomOutBtn"><span>−</span> Zoom out</button>
         <button class="side-action" id="zoomInBtn"><span>＋</span> Zoom in</button>
 
-        <div class="help-card" style="display: none;">
-          <div class="help-title">Suggerimento</div>
-          <p>Puoi scegliere se rappresentare le porte come una linea spessa marrone sul bordo oppure con apertura verso l'interno o verso l'esterno. Le porte e le finestre si agganciano al bordo della sala.</p>
+        <div class="help-card">
+          <div class="help-title">Suggerimento Navigazione</div>
+          <p>Usa la rotella del mouse per fare zoom in/out nel punto desiderato. Trascina con il tasto sinistro sullo sfondo per spostare la planimetria.</p>
         </div>
       </aside>
 
@@ -170,7 +170,7 @@
               <g id="labelsLayer"></g>
             </g>
           </svg>
-          <div class="scale-bar"><span>0</span><i></i><span>2 m</span></div>
+          <div class="scale-bar"><span>0</span><i></i><span id="scaleBarLabel">2 m</span></div>
           <div class="zoom-pill"><span id="zoomLabel">100%</span></div>
         </div>
       </section>
@@ -189,7 +189,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  
+
   <script src="app.js"></script>
 </body>
 </html>
