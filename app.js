@@ -27,6 +27,7 @@ let selected = null;
 let hovered = null;
 let labelMode = "hover"; // "hover", "merchants", "all"
 let scale = 1, fitScale = 1, offset = { x: 0, y: 0 }, gridOn = true, history = [], future = [];
+let moveMode = false;
 let drag = null;
 let isPanning = false;
 let panStart = { x: 0, y: 0 };
@@ -612,6 +613,7 @@ function render() {
   $("#objectCount").textContent = `${totalCount} elementi`;
 
   updateStats();
+  updateMoveButton();
 }
 
 function createLabelOverlay(o, kind, cx, cy, label) {
@@ -692,9 +694,16 @@ function onPointerDown(e, kind, id, parent) {
   e.stopPropagation();
   const isResize = e.target.dataset.resize === "1";
   const o = getObj(kind, id);
+  const wasSelected = !!selected && selected.kind === kind && selected.id === id;
+  if (!wasSelected) moveMode = false;   // cambio selezione => modalità sposta spenta
   selected = { kind, id };
   showProps();
   render();
+
+  // Un click seleziona soltanto. Il trascinamento parte solo se l'elemento era già
+  // selezionato e il pulsante "Sposta" è attivo. La maniglia di ridimensionamento
+  // (visibile solo da selezionato) continua a funzionare.
+  if (!isResize && !(wasSelected && moveMode)) return;
 
   const p = roomPoint(e);
   if (kind === "opening") {
@@ -1166,7 +1175,141 @@ window.addEventListener("keydown", e => {
     render();
     showProps();
   }
+  if ((e.key === "m" || e.key === "M") && selected && !e.ctrlKey && !e.metaKey &&
+      !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
+    $("#moveBtn").click();
+  }
 });
+
+/* ================= Pulsante SPOSTA ================= */
+function updateMoveButton() {
+  const btn = $("#moveBtn");
+  if (!btn) return;
+  if (!selected) moveMode = false;
+  btn.classList.toggle("hidden", !selected);
+  btn.classList.toggle("active", moveMode);
+  btn.textContent = moveMode ? "✥ Sposta: attivo" : "✥ Sposta";
+  stage.classList.toggle("move-mode", moveMode);
+}
+$("#moveBtn").onclick = () => {
+  if (!selected) return;
+  moveMode = !moveMode;
+  updateMoveButton();
+  toast(moveMode ? "Trascina l'elemento per spostarlo" : "Spostamento disattivato");
+};
+
+/* ================= Esporta PDF (A4) ================= */
+const fmtM = n => Number(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+const metersOf = o => Math.max(o.width || 0, o.height || 0);
+
+function svgText(text, x, y, size, weight, baseline) {
+  return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="${baseline}"
+    font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="${weight}"
+    fill="#1d1b18" stroke="#fff" stroke-width="${size * 0.2}" paint-order="stroke"
+    stroke-linejoin="round">${esc(text)}</text>`;
+}
+
+// Nome con sfondo "pillola" centrato in (cx, cy)
+function svgPill(text, cx, cy, size) {
+  const label = String(text);
+  const w = label.length * size * 0.58 + size * 1.1;   // larghezza stimata + padding
+  const h = size * 1.7;
+  return `<g>
+    <rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="${h * 0.28}"
+      fill="#ffffff" fill-opacity="0.94" stroke="#1f5d55" stroke-width="${size * 0.05}"/>
+    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central"
+      font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="600"
+      fill="#25231f">${esc(label)}</text>
+  </g>`;
+}
+
+function buildPlanSvg(boxW, boxH) {
+  const W = project.space.width, H = project.space.height;
+
+  // Scala stimata (mm per metro) per avere testi di dimensione costante sulla carta
+  const s0 = Math.min(boxW / W, boxH / H);
+  const fsExh = 3.6 / s0;      // ≈ 10 pt: nome spazio espositivo
+  const fsMer = 2.8 / s0;      // ≈ 8 pt: nome commerciante
+  const pad = 0.3, padTop = fsExh * 1.5 + 0.2;
+
+  const clone = objectsEl.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.querySelectorAll(".selection, .handle").forEach(n => n.remove());
+  clone.querySelectorAll("[filter]").forEach(n => n.removeAttribute("filter"));
+  clone.querySelectorAll(".selected").forEach(n => n.classList.remove("selected"));
+
+  let labels = "";
+  project.exhibitors.forEach(e => {
+    // Nome dello spazio: subito sopra il bordo superiore
+    labels += svgText(e.name || "Spazio", e.x + e.width / 2, e.y - fsExh * 0.3, fsExh, 700, "auto");
+    // Nomi dei commercianti: centrati sul tavolo, possono uscire dal riquadro
+    (e.tables || []).forEach(t => {
+      labels += svgPill(t.merchant || "Tavolo", e.x + t.x + t.width / 2, e.y + t.y + t.height / 2, fsMer);
+    });
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg"
+      viewBox="${-pad} ${-padTop} ${W + 2 * pad} ${H + padTop + pad}"
+      preserveAspectRatio="xMidYMid meet" style="width:${boxW}mm;height:${boxH}mm;overflow:visible">
+    <rect x="0" y="0" width="${W}" height="${H}" fill="#fff" stroke="#292722" stroke-width="0.12"/>
+    ${clone.outerHTML}
+    ${labels}
+  </svg>`;
+}
+
+function buildListHtml() {
+  let rows = "", total = 0, count = 0;
+  project.exhibitors.forEach(e => {
+    const tabs = e.tables || [];
+    const sub = tabs.reduce((s, t) => s + metersOf(t), 0);
+    total += sub; count += tabs.length;
+    rows += `<tr class="grp"><td>${esc(e.name || "Spazio")}</td><td>${fmtM(e.width)} × ${fmtM(e.height)} m</td><td></td></tr>`;
+    if (!tabs.length) rows += `<tr class="empty"><td colspan="3">Nessun commerciante assegnato</td></tr>`;
+    tabs.forEach(t => {
+      rows += `<tr><td class="ind">${esc(t.merchant || "Tavolo")}</td><td>${fmtM(t.width)} × ${fmtM(t.height)} m</td><td class="num">${fmtM(metersOf(t))} m</td></tr>`;
+    });
+    if (tabs.length) rows += `<tr class="sub"><td colspan="2">Subtotale ${esc(e.name || "")} (spazio ${fmtM(metersOf(e))} m)</td><td class="num">${fmtM(sub)} m</td></tr>`;
+  });
+  rows += `<tr class="total"><td colspan="2">Totale metri espositivi (${count} ${count === 1 ? "commerciante" : "commercianti"})</td><td class="num">${fmtM(total)} m</td></tr>`;
+
+  // Tabella contenitore: thead/tfoot vuoti si ripetono su ogni pagina e creano i margini
+  return `<table class="pgwrap">
+    <thead><tr><td><div style="height:12mm"></div></td></tr></thead>
+    <tfoot><tr><td><div style="height:16mm"></div></td></tr></tfoot>
+    <tbody><tr><td><div class="print-list">
+      <h2>Elenco espositori — ${esc(project.space.name || "Planimetria")}</h2>
+      <table class="data"><thead><tr><th>Espositore</th><th>Dimensioni</th><th class="num">Metri</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div></td></tr></tbody>
+  </table>`;
+}
+
+function exportPDF() {
+  const W = project.space.width, H = project.space.height;
+  const M = 10, HEAD = 12, FOOT = 8;                         // mm
+  const dims = { land: { pw: 297, ph: 210 }, port: { pw: 210, ph: 297 } };
+  const scaleOf = d => Math.min((d.pw - 2 * M) / W, (d.ph - 2 * M - HEAD - FOOT) / H);
+  const landscape = scaleOf(dims.land) >= scaleOf(dims.port);
+  const { pw, ph } = landscape ? dims.land : dims.port;
+  const boxW = pw - 2 * M, boxH = ph - 2 * M - HEAD - FOOT;
+
+  let st = $("#printPageStyle");
+  if (!st) { st = document.createElement("style"); st.id = "printPageStyle"; document.head.appendChild(st); }
+  st.textContent = `@page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 0; }`;
+
+  $("#printRoot").innerHTML = `
+    <div class="print-page plan print-plan" style="width:${pw}mm;height:${ph - 0.6}mm;padding:${M}mm">
+      <div class="print-head"><h1>${esc(project.space.name || "Planimetria")}</h1>
+        <span>${fmtM(W)} × ${fmtM(H)} m</span></div>
+      ${buildPlanSvg(boxW, boxH)}
+    </div>
+    ${buildListHtml()}
+    <div class="print-foot">© 2026 Pino Inside</div>`;
+
+  setTimeout(() => window.print(), 60);   // nel dialogo scegli "Salva come PDF"
+}
+window.addEventListener("afterprint", () => { $("#printRoot").innerHTML = ""; });
+$("#pdfBtn").onclick = exportPDF;
 
 initRoomControls();
 if (!loadFromLocalStorage()) {

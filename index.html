@@ -1,17 +1,20 @@
 <!doctype html>
 <html lang="it">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SpacePlanner — Gestione Planimetria</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" title="SpacePlanner">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round">
             <!-- Ruler (Diagonal Left to Right) -->
             <path d="M 3 6 L 18 21" stroke-width="2.5" />
             <path d="M 6 5 L 8 7" />
@@ -33,6 +36,7 @@
         <button class="btn ghost" id="newBtn">Nuovo</button>
         <button class="btn ghost" id="openBtn">Apri JSON</button>
         <button class="btn primary" id="saveBtn">Salva JSON</button>
+        <button class="btn ghost" id="pdfBtn">Esporta PDF</button>
         <input type="file" id="fileInput" accept=".json,application/json" hidden>
       </div>
     </header>
@@ -128,7 +132,8 @@
 
         <div class="help-card">
           <div class="help-title">Suggerimento Navigazione</div>
-          <p>Usa la rotella del mouse per fare zoom in/out nel punto desiderato. Trascina con il tasto sinistro sullo sfondo per spostare la planimetria.</p>
+          <p>Usa la rotella del mouse per fare zoom in/out nel punto desiderato. Trascina con il tasto sinistro sullo
+            sfondo per spostare la planimetria.</p>
         </div>
       </aside>
 
@@ -144,28 +149,29 @@
             </div>
           </div>
           <div class="canvas-tools">
+            <button class="btn ghost hidden" id="moveBtn" title="Sposta l'elemento selezionato (M)">✥ Sposta</button>
             <button class="icon-btn" id="undoBtn" title="Annulla">↶</button>
             <button class="icon-btn" id="redoBtn" title="Ripeti">↷</button>
           </div>
         </div>
-        
+
         <div class="canvas-wrap" id="canvasWrap">
           <svg id="stage" xmlns="http://www.w3.org/2000/svg" aria-label="Planimetria">
             <defs>
               <pattern id="minorGrid" width="1" height="1" patternUnits="userSpaceOnUse">
-                <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e8e6e2" stroke-width="0.05"/>
+                <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e8e6e2" stroke-width="0.05" />
               </pattern>
               <pattern id="majorGrid" width="5" height="5" patternUnits="userSpaceOnUse">
-                <rect width="5" height="5" fill="url(#minorGrid)"/>
-                <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d9d6d0" stroke-width="0.08"/>
+                <rect width="5" height="5" fill="url(#minorGrid)" />
+                <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d9d6d0" stroke-width="0.08" />
               </pattern>
               <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="0.15" stdDeviation="0.2" flood-color="#1d1b18" flood-opacity=".12"/>
+                <feDropShadow dx="0" dy="0.15" stdDeviation="0.2" flood-color="#1d1b18" flood-opacity=".12" />
               </filter>
             </defs>
             <g id="viewport">
-              <rect id="room" x="0" y="0" rx="0" ry="0" fill="#ffffff" stroke="#292722" stroke-width="0.12"/>
-              <rect id="grid" x="0" y="0" fill="url(#majorGrid)"/>
+              <rect id="room" x="0" y="0" rx="0" ry="0" fill="#ffffff" stroke="#292722" stroke-width="0.12" />
+              <rect id="grid" x="0" y="0" fill="url(#majorGrid)" />
               <g id="objects"></g>
               <g id="labelsLayer"></g>
             </g>
@@ -187,9 +193,10 @@
       </aside>
     </main>
   </div>
-
+  <div id="printRoot"></div>
   <div id="toast" class="toast"></div>
 
   <script src="app.js"></script>
 </body>
+
 </html>
