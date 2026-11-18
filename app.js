@@ -58,7 +58,7 @@ function loadFromLocalStorage() {
 
 function validateAndApplyProject(data) {
   if (!data || typeof data !== "object") throw new Error("Formato JSON non valido");
-  
+
   project = {
     version: data.version || 1,
     space: {
@@ -82,28 +82,28 @@ function validateAndApplyProject(data) {
 }
 
 function uid(prefix) { return prefix + "-" + Math.random().toString(36).slice(2, 8); }
-function snapshot() { 
-  history.push(JSON.stringify(project)); 
-  if (history.length > 30) history.shift(); 
-  future = []; 
-  markDirty(); 
+function snapshot() {
+  history.push(JSON.stringify(project));
+  if (history.length > 30) history.shift();
+  future = [];
+  markDirty();
 }
-function restore(s) { 
-  project = JSON.parse(s); 
+function restore(s) {
+  project = JSON.parse(s);
   if (!project.openings) project.openings = [];
-  selected = null; 
-  hovered = null; 
-  syncRoomInputs(); 
-  render(); 
-  showProps(); 
+  selected = null;
+  hovered = null;
+  syncRoomInputs();
+  render();
+  showProps();
   saveToLocalStorage();
 }
-function markDirty() { 
-  $("#saveStatus").textContent = "Modifiche non salvate"; 
+function markDirty() {
+  $("#saveStatus").textContent = "Modifiche non salvate";
   saveToLocalStorage();
 }
-function markSaved() { 
-  $("#saveStatus").textContent = "Salvato"; 
+function markSaved() {
+  $("#saveStatus").textContent = "Salvato";
   saveToLocalStorage();
 }
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
@@ -162,7 +162,7 @@ function zoomAt(factor, cx, cy) {
   const minS = Math.max(2, fitScale * 0.3);
   const maxS = Math.min(300, fitScale * 12);
   const newScale = Math.max(minS, Math.min(maxS, scale * factor));
-  
+
   if (Math.abs(newScale - oldScale) < 0.0001) return;
 
   const ratio = newScale / oldScale;
@@ -269,7 +269,7 @@ function render() {
   const draw = (o, kind, parent) => {
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.classList.add("obj");
-    
+
     const isSelected = selected && selected.kind === kind && selected.id === o.id;
     if (isSelected) {
       g.classList.add("selected");
@@ -495,7 +495,7 @@ function render() {
         const orient = o.orientation || (o.height >= o.width ? "up" : "right");
         const isVert = orient === "up" || orient === "down";
         const numSteps = Math.max(3, Math.floor((isVert ? o.height : o.width) / 0.35));
-        
+
         for (let i = 1; i < numSteps; i++) {
           const stepLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
           if (isVert) {
@@ -624,7 +624,7 @@ function createLabelOverlay(o, kind, cx, cy, label) {
 
   const labelBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   const textEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  
+
   textEl.setAttribute("x", cx);
   textEl.setAttribute("y", cy);
   textEl.setAttribute("text-anchor", "middle");
@@ -712,7 +712,7 @@ function onPointerDown(e, kind, id, parent) {
     const baseX = o.x, baseY = o.y, baseW = o.width, baseH = o.height;
     drag = { kind, id, parent, mode: isResize ? "resize" : "move", start: p, baseX, baseY, baseW, baseH };
   }
-  
+
   try {
     if (e.pointerId !== undefined && stage.setPointerCapture) {
       stage.setPointerCapture(e.pointerId);
@@ -768,7 +768,7 @@ stage.addEventListener("pointerup", e => {
   if (isPanning) {
     isPanning = false;
     canvasWrap.classList.remove("panning");
-    try { if (e.pointerId !== undefined) stage.releasePointerCapture(e.pointerId); } catch (err) {}
+    try { if (e.pointerId !== undefined) stage.releasePointerCapture(e.pointerId); } catch (err) { }
     return;
   }
 
@@ -798,7 +798,7 @@ stage.addEventListener("pointerdown", e => {
       if (e.pointerId !== undefined && stage.setPointerCapture) {
         stage.setPointerCapture(e.pointerId);
       }
-    } catch (err) {}
+    } catch (err) { }
   }
 });
 
@@ -853,6 +853,45 @@ function updatePropsValues() {
   });
 }
 
+// Cerca una posizione libera per il tavolo t dentro lo spazio target
+function placeTableIn(target, t) {
+  t.width = Math.min(t.width, target.width);
+  t.height = Math.min(t.height, target.height);
+  const maxX = target.width - t.width, maxY = target.height - t.height;
+  const others = target.tables.filter(x => x.id !== t.id);
+  const free = (x, y) => !others.some(o =>
+    x < o.x + o.width && x + t.width > o.x && y < o.y + o.height && y + t.height > o.y);
+
+  // 1) stessa posizione relativa, adattata ai bordi
+  const px = Math.max(0, Math.min(maxX, t.x)), py = Math.max(0, Math.min(maxY, t.y));
+  if (free(px, py)) { t.x = px; t.y = py; return true; }
+
+  // 2) primo posto libero, a passi di 0,5 m
+  for (let y = 0; y <= maxY + 1e-6; y += 0.5) {
+    for (let x = 0; x <= maxX + 1e-6; x += 0.5) {
+      if (free(x, y)) { t.x = x; t.y = y; return true; }
+    }
+  }
+  // 3) nessun posto libero: lo mette comunque dov'era (adattato)
+  t.x = px; t.y = py;
+  return false;
+}
+
+function moveTableToExhibitor(tableId, targetId) {
+  const oldParent = getParentExhibitor(tableId);
+  const target = getObj("exhibitor", targetId);
+  if (!oldParent || !target || oldParent.id === target.id) return;
+  snapshot();
+  const t = oldParent.tables.find(x => x.id === tableId);
+  oldParent.tables = oldParent.tables.filter(x => x.id !== tableId);
+  const ok = placeTableIn(target, t);
+  target.tables.push(t);
+  selected = { kind: "table", id: t.id };
+  render();
+  showProps();
+  toast(ok ? `Spostato in "${target.name}"` : `Spostato in "${target.name}" (spazio pieno: controlla le sovrapposizioni)`);
+}
+
 function showProps() {
   const empty = $("#emptyProperties"), p = $("#properties");
   if (!selected) {
@@ -873,6 +912,13 @@ function showProps() {
 
   if (selected.kind === "table") {
     html += field("Commerciante", o.merchant, "merchant");
+    const parentExh = getParentExhibitor(o.id);
+    if (project.exhibitors.length > 1) {
+      html += `<div class="field"><div class="field-label">Sposta in spazio</div>
+        <select id="moveToSelect">
+          ${project.exhibitors.map(e => `<option value="${e.id}" ${parentExh && parentExh.id === e.id ? "selected" : ""}>${esc(e.name || "Spazio")}</option>`).join("")}
+        </select></div>`;
+    }
   } else {
     html += field("Nome", o.name, "name");
   }
@@ -908,7 +954,7 @@ function showProps() {
 
     html += `<div class="field-row">${field("X (m)", o.x, "x", "number")}${field("Y (m)", o.y, "y", "number")}</div>`;
     html += `<div class="field-row">${field("Larghezza (m)", o.width, "width", "number")}${field("Altezza (m)", o.height, "height", "number")}</div>`;
-    
+
     html += `<button class="btn ghost" id="swapDimsBtn" style="width:100%;margin-bottom:10px;">⇄ Inverti L × A (Ruota 90°)</button>`;
 
     let defaultColor = "#dbeae7";
@@ -919,7 +965,7 @@ function showProps() {
     html += `<div class="field"><div class="field-label">Colore Elemento</div><div class="color-row"><input data-key="color" type="color" value="${currentColor}"><span style="font-size:10px;color:#888">${currentColor}</span></div></div>`;
 
     if (selected.kind === "exhibitor") {
-      html += `<div class="field"><div class="field-label">Tavoli</div><div style="font-size:11px;color:#666">${o.tables.length} tavoli · ${o.tables.reduce((s,t)=>s+t.width*t.height,0).toFixed(2)} m²</div></div>`;
+      html += `<div class="field"><div class="field-label">Tavoli</div><div style="font-size:11px;color:#666">${o.tables.length} tavoli · ${o.tables.reduce((s, t) => s + t.width * t.height, 0).toFixed(2)} m²</div></div>`;
       html += `<button class="btn primary" id="addTableBtn" style="width:100%;margin-top:4px;">+ Aggiungi tavolo</button>`;
     }
   }
@@ -931,7 +977,7 @@ function showProps() {
     inp.oninput = () => {
       const key = inp.dataset.key;
       let v = inp.type === "number" ? (parseFloat(inp.value) || 0) : inp.value;
-      
+
       if (key === "orientation" && o.type === "stairs") {
         const isOldVert = o.orientation === "up" || o.orientation === "down";
         const isNewVert = v === "up" || v === "down";
@@ -945,7 +991,7 @@ function showProps() {
           if (hInp) hInp.value = o.height;
         }
       }
-      
+
       o[key] = v;
       if (selected.kind === "opening") clampOpenings();
       render();
@@ -957,6 +1003,11 @@ function showProps() {
       markDirty();
     };
   });
+
+  const moveToSelect = $("#moveToSelect");
+  if (moveToSelect) {
+    moveToSelect.onchange = () => moveTableToExhibitor(o.id, moveToSelect.value);
+  }
 
   const swapDimsBtn = $("#swapDimsBtn");
   if (swapDimsBtn) {
@@ -1176,7 +1227,7 @@ window.addEventListener("keydown", e => {
     showProps();
   }
   if ((e.key === "m" || e.key === "M") && selected && !e.ctrlKey && !e.metaKey &&
-      !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
+    !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
     $("#moveBtn").click();
   }
 });
